@@ -70,9 +70,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Halaman Dashboard
                         composable<Screen.Dashboard> {
+                            val user by loginViewModel.currentUser.collectAsState(initial = null)
                             DashboardScreen(
+                                fullName = user?.fullName ?: "Goalmate User",
                                 onLogoutClick = {
                                     loginViewModel.signOut()
                                 }
