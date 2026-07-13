@@ -5,7 +5,6 @@ import com.almagribii.goalmate.domain.repository.AuthRepository
 import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.gotrue.providers.Google
 import io.github.jan.supabase.gotrue.providers.builtin.IDToken
-
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -25,7 +24,8 @@ class AuthRepositoryImpl @Inject constructor(
                     ?: user.userMetadata?.get("name")?.toString()
                     ?: "Goalmate User",
                 email = user.email ?: "",
-                avatarUrl = user.userMetadata?.get("avatar_url")?.toString(),
+                avatarUrl = user.userMetadata?.get("avatar_url")?.toString()
+                    ?: user.userMetadata?.get("picture")?.toString(),
                 provider = "google"
             )
         } else {
@@ -35,7 +35,6 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun signInWithGoogle(idToken: String): Result<Unit> {
         return runCatching {
-            // PERBAIKAN: Gunakan IDToken provider untuk meneruskan token OAuth Google
             supabaseAuth.signInWith(IDToken) {
                 this.idToken = idToken
                 provider = Google
