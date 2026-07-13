@@ -1,4 +1,11 @@
 package com.almagribii.goalmate.core.navigation
 
-class Screen {
+import kotlinx.serialization.Serializable
+
+sealed interface Screen {
+    @Serializable
+    data object Login : Screen
+
+    @Serializable
+    data object Dashboard : Screen
 }
