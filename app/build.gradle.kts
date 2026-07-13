@@ -89,6 +89,7 @@ dependencies {
     // DataStore Preferences & Coil Image Loader
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     testImplementation(libs.junit)
