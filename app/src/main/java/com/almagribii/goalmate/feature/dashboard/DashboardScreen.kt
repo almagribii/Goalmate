@@ -1,78 +1,46 @@
 package com.almagribii.goalmate.feature.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.almagribii.goalmate.core.navigation.NavigationItem
+import com.almagribii.goalmate.feature.dashboard.components.DashboardBottomBar
+import com.almagribii.goalmate.feature.dashboard.components.DashboardHeader
+import com.almagribii.goalmate.feature.dashboard.components.HomeScreen
+import com.almagribii.goalmate.feature.goal.MyGoalScreen
+import com.almagribii.goalmate.feature.history.HistoryScreen
 
 @Composable
 fun DashboardScreen(
+    fullName: String,
     onLogoutClick: () -> Unit
 ) {
-    Scaffold { paddingValues ->
+    var currentTab by remember { mutableStateOf<NavigationItem>(NavigationItem.Dashboard) }
+
+    Scaffold(
+        topBar = { DashboardHeader(currentTab = currentTab) },
+        bottomBar = {
+            DashboardBottomBar(
+                currentTab = currentTab,
+                onTabSelected = { selectedTab -> currentTab = selectedTab },
+                onAddGoalClick = { /* Nanti kita handle lembar dialog tambah goal di sini */ }
+            )
+        }
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
+                .padding(paddingValues)
+                .background(Color(0xFFF8FAFC))
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(24.dp)
-            ) {
-                Text(
-                    text = "Dashboard Goalmate",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF0F172A)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Tempat terbaik untuk mengelola target tokomu.",
-                    fontSize = 16.sp,
-                    color = Color.Gray
-                )
-
-                Spacer(modifier = Modifier.height(48.dp))
-
-                Button(
-                    onClick = onLogoutClick, // Menyambungkan aksi klik ke parameter
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "Logout Icon"
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Sign Out dari Akun",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
+            when (currentTab) {
+                NavigationItem.Dashboard -> HomeScreen()
+                NavigationItem.MyGoal -> MyGoalScreen()
+                NavigationItem.History -> HistoryScreen()
+                NavigationItem.Profile -> ProfileScreen(fullName = fullName, onLogoutClick = onLogoutClick)
             }
         }
     }
