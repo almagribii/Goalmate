@@ -16,13 +16,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.feature.goal.components.UpdateProgressDialog
 
 @Composable
 fun MyGoalScreen(
-    viewModel: GoalViewModel
+    viewModel: GoalViewModel = hiltViewModel()
 ) {
     val activeGoalsState by viewModel.activeGoalsState.collectAsState()
 

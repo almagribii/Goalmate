@@ -68,4 +68,16 @@ class GoalRepositoryImpl @Inject constructor(
             .select()
             .decodeList<GoalUnit>()
     }
+
+    override fun getCompletedGoals(userId: String): Flow<List<Goal>> = flow {
+        val response = postgrest.from("goals")
+            .select(Columns.raw("*, category:goal_categories(*), unit:goal_units(*)")) {
+                filter {
+                    eq("user_id", userId)
+                    eq("status", "completed")
+                }
+            }
+            .decodeList<Goal>()
+        emit(response)
+    }
 }

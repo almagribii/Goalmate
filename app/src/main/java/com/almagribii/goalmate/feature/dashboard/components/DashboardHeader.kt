@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,7 +31,8 @@ import com.almagribii.goalmate.core.navigation.NavigationItem
 @Composable
 fun DashboardHeader(
     currentTab: NavigationItem,
-    fullName: String
+    fullName: String,
+    streakCount: Int = 0
 ) {
     val context = LocalContext.current
     val sharedPreferences = remember { context.getSharedPreferences("goalmate_prefs", Context.MODE_PRIVATE) }
@@ -75,6 +77,29 @@ fun DashboardHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Streak Flame ala Duolingo
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (streakCount > 0) Color(0xFFFFF7ED) else Color(0xFFF1F5F9))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Whatshot,
+                        contentDescription = "Streak",
+                        tint = if (streakCount > 0) Color(0xFFF97316) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = streakCount.toString(),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (streakCount > 0) Color(0xFFC2410C) else Color(0xFF64748B)
+                    )
+                }
+
                 IconButton(
                     onClick = { /* Handle buka halaman notifikasi */ },
                     modifier = Modifier.size(36.dp)

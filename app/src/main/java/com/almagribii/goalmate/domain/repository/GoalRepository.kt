@@ -21,4 +21,6 @@ interface GoalRepository {
     // Mengambil data master untuk pilihan di Form Add Goal
     suspend fun getCategories(): Result<List<GoalCategory>>
     suspend fun getUnits(): Result<List<GoalUnit>>
+
+    fun getCompletedGoals(userId: String): Flow<List<Goal>>
 }

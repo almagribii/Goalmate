@@ -12,24 +12,39 @@ import com.almagribii.goalmate.feature.dashboard.components.AddGoalBottomSheet
 import com.almagribii.goalmate.feature.dashboard.components.DashboardBottomBar
 import com.almagribii.goalmate.feature.dashboard.components.DashboardHeader
 import com.almagribii.goalmate.feature.dashboard.components.HomeScreen
+import com.almagribii.goalmate.feature.dashboard.components.StreakRewardDialog
 import com.almagribii.goalmate.feature.goal.GoalViewModel
 import com.almagribii.goalmate.feature.goal.MyGoalScreen
 import com.almagribii.goalmate.feature.history.HistoryScreen
+import com.almagribii.goalmate.feature.profile.ProfileScreen
 
 @Composable
 fun DashboardScreen(
     fullName: String,
+    email: String,
     onLogoutClick: () -> Unit,
     goalViewModel: GoalViewModel = hiltViewModel()
 ) {
     var currentTab by remember { mutableStateOf<NavigationItem>(NavigationItem.Dashboard) }
     var showAddGoalSheet by remember { mutableStateOf(false) }
+    var showStreakDialog by remember { mutableStateOf(false) }
+    var latestStreak by remember { mutableIntStateOf(0) }
+    val streakCount by goalViewModel.streakState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        goalViewModel.fetchUserProfile()
+        goalViewModel.streakIncreasedEvent.collect { newStreak ->
+            latestStreak = newStreak
+            showStreakDialog = true
+        }
+    }
 
     Scaffold(
         topBar = {
             DashboardHeader(
                 currentTab = currentTab,
-                fullName = fullName
+                fullName = fullName,
+                streakCount = streakCount
             )
         },
         bottomBar = {
@@ -49,8 +64,8 @@ fun DashboardScreen(
             when (currentTab) {
                 NavigationItem.Dashboard -> HomeScreen()
                 NavigationItem.MyGoal -> MyGoalScreen(viewModel = goalViewModel)
-                NavigationItem.History -> HistoryScreen()
-                NavigationItem.Profile -> ProfileScreen(fullName = fullName, onLogoutClick = onLogoutClick)
+                NavigationItem.History -> HistoryScreen(viewModel = goalViewModel)
+                NavigationItem.Profile -> ProfileScreen(fullName = fullName, email = email, onLogoutClick = onLogoutClick, viewModel = goalViewModel)
             }
         }
     }
@@ -58,6 +73,13 @@ fun DashboardScreen(
         AddGoalBottomSheet(
             viewModel = goalViewModel,
             onDismiss = { showAddGoalSheet = false }
+        )
+    }
+
+    if (showStreakDialog) {
+        StreakRewardDialog(
+            streakCount = latestStreak,
+            onDismiss = { showStreakDialog = false }
         )
     }
 }
