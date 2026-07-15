@@ -11,9 +11,10 @@ import com.almagribii.goalmate.core.navigation.NavigationItem
 import com.almagribii.goalmate.feature.dashboard.components.AddGoalBottomSheet
 import com.almagribii.goalmate.feature.dashboard.components.DashboardBottomBar
 import com.almagribii.goalmate.feature.dashboard.components.DashboardHeader
-import com.almagribii.goalmate.feature.dashboard.components.HomeScreen
+import com.almagribii.goalmate.feature.dashboard.components.StreakResetDialog
 import com.almagribii.goalmate.feature.dashboard.components.StreakRewardDialog
 import com.almagribii.goalmate.feature.goal.GoalViewModel
+import kotlinx.coroutines.launch
 import com.almagribii.goalmate.feature.goal.MyGoalScreen
 import com.almagribii.goalmate.feature.history.HistoryScreen
 import com.almagribii.goalmate.feature.profile.ProfileScreen
@@ -28,14 +29,26 @@ fun DashboardScreen(
     var currentTab by remember { mutableStateOf<NavigationItem>(NavigationItem.Dashboard) }
     var showAddGoalSheet by remember { mutableStateOf(false) }
     var showStreakDialog by remember { mutableStateOf(false) }
+    var showStreakResetDialog by remember { mutableStateOf(false) }
     var latestStreak by remember { mutableIntStateOf(0) }
     val streakCount by goalViewModel.streakState.collectAsState()
 
     LaunchedEffect(Unit) {
         goalViewModel.fetchUserProfile()
-        goalViewModel.streakIncreasedEvent.collect { newStreak ->
-            latestStreak = newStreak
-            showStreakDialog = true
+        
+        // Listen kenaikan streak
+        launch {
+            goalViewModel.streakIncreasedEvent.collect { newStreak ->
+                latestStreak = newStreak
+                showStreakDialog = true
+            }
+        }
+
+        // Listen reset streak
+        launch {
+            goalViewModel.streakResetEvent.collect {
+                showStreakResetDialog = true
+            }
         }
     }
 
@@ -62,7 +75,7 @@ fun DashboardScreen(
                 .background(Color(0xFFF8FAFC))
         ) {
             when (currentTab) {
-                NavigationItem.Dashboard -> HomeScreen()
+                NavigationItem.Dashboard -> HomeScreen(fullName = fullName, viewModel = goalViewModel)
                 NavigationItem.MyGoal -> MyGoalScreen(viewModel = goalViewModel)
                 NavigationItem.History -> HistoryScreen(viewModel = goalViewModel)
                 NavigationItem.Profile -> ProfileScreen(fullName = fullName, email = email, onLogoutClick = onLogoutClick, viewModel = goalViewModel)
@@ -80,6 +93,12 @@ fun DashboardScreen(
         StreakRewardDialog(
             streakCount = latestStreak,
             onDismiss = { showStreakDialog = false }
+        )
+    }
+
+    if (showStreakResetDialog) {
+        StreakResetDialog(
+            onDismiss = { showStreakResetDialog = false }
         )
     }
 }

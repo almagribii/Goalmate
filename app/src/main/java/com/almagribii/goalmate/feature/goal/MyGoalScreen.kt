@@ -4,9 +4,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,216 +29,408 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
 import com.almagribii.goalmate.domain.model.Goal
-import com.almagribii.goalmate.feature.goal.components.UpdateProgressDialog
+import com.almagribii.goalmate.domain.model.GoalCategory
+import com.almagribii.goalmate.feature.dashboard.components.AddGoalBottomSheet
+import com.almagribii.goalmate.feature.dashboard.components.EditGoalBottomSheet
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyGoalScreen(
     viewModel: GoalViewModel = hiltViewModel()
 ) {
     val activeGoalsState by viewModel.activeGoalsState.collectAsState()
+    val categoriesState by viewModel.categoriesState.collectAsState()
 
-    // State untuk memantau kartu target mana yang sedang dipilih untuk diupdate
-    var selectedGoalForUpdate by remember { mutableStateOf<Goal?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategoryId by remember { mutableStateOf<String?>("All") }
 
-    Box(
+    var editingGoal by remember { mutableStateOf<Goal?>(null) }
+    var updatingProgressGoal by remember { mutableStateOf<Goal?>(null) }
+    var showAddGoalSheet by remember { mutableStateOf(false) }
+
+    val activeGoals = remember(activeGoalsState) {
+        (activeGoalsState as? UiState.Success)?.data ?: emptyList()
+    }
+
+    val categories = remember(categoriesState) {
+        (categoriesState as? UiState.Success)?.data ?: emptyList()
+    }
+
+    val filteredGoals = remember(activeGoals, searchQuery, selectedCategoryId) {
+        activeGoals.filter { goal ->
+            val matchesSearch = goal.title.contains(searchQuery, ignoreCase = true)
+            val matchesCategory = if (selectedCategoryId == "All") {
+                true
+            } else {
+                goal.categoryId == selectedCategoryId
+            }
+            matchesSearch && matchesCategory
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchActiveGoals()
+        viewModel.loadMasterData()
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(Color(0xFFFBFDFF))
     ) {
-        when (val state = activeGoalsState) {
-            is UiState.Loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color(0xFFF97316)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search", color = Color(0xFF94A3B8), fontSize = 15.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF94A3B8)) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            shape = RoundedCornerShape(99.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                unfocusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                disabledContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+            ),
+            singleLine = true
+        )
+
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                GoalFilterPill(
+                    text = "All",
+                    isSelected = selectedCategoryId == "All",
+                    onClick = { selectedCategoryId = "All" }
                 )
             }
-            is UiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("⚠️", fontSize = 32.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = state.message, color = Color.Red, fontSize = 14.sp)
+            items(categories) { category ->
+                GoalFilterPill(
+                    text = category.name,
+                    isSelected = selectedCategoryId == category.id,
+                    onClick = { selectedCategoryId = category.id }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (filteredGoals.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "No active goals found",
+                        color = Color.Gray,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { showAddGoalSheet = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Your First Goal")
+                    }
                 }
             }
-            is UiState.Success -> {
-                val goals = state.data
-                if (goals.isEmpty()) {
-                    EmptyGoalsView()
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(goals) { goal ->
-                            GoalCardPremium(
-                                goal = goal,
-                                onClick = { selectedGoalForUpdate = goal } // Triger klik kartu
-                            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredGoals) { goal ->
+                    val matchedCategory = categories.find { it.id == goal.categoryId }
+                    MyGoalCardItem(
+                        goal = goal,
+                        categoryName = matchedCategory?.name ?: "",
+                        onItemClick = {
+                            updatingProgressGoal = goal
+                        },
+                        onEditClick = {
+                            editingGoal = goal
+                        },
+                        onDeleteClick = {
+                            goal.id?.let { viewModel.deleteGoal(it) }
                         }
-                    }
+                    )
                 }
             }
         }
     }
 
-    // Tampilkan Dialog Update jika ada goal yang dipilih
-    selectedGoalForUpdate?.let { goal ->
+    if (editingGoal != null) {
+        EditGoalBottomSheet(
+            goal = editingGoal!!,
+            viewModel = viewModel,
+            onDismiss = { editingGoal = null }
+        )
+    }
+
+    if (updatingProgressGoal != null) {
         UpdateProgressDialog(
-            goal = goal,
-            onDismiss = { selectedGoalForUpdate = null },
+            goal = updatingProgressGoal!!,
+            onDismiss = { updatingProgressGoal = null },
             onConfirm = { additionalValue ->
-                viewModel.updateGoalProgress(goal, additionalValue)
+                viewModel.updateGoalProgress(updatingProgressGoal!!, additionalValue)
+                updatingProgressGoal = null
             }
+        )
+    }
+
+    if (showAddGoalSheet) {
+        AddGoalBottomSheet(
+            viewModel = viewModel,
+            onDismiss = { showAddGoalSheet = false }
         )
     }
 }
 
 @Composable
-fun GoalCardPremium(
+fun UpdateProgressDialog(
     goal: Goal,
+    onDismiss: () -> Unit,
+    onConfirm: (Double) -> Unit
+) {
+    var progressText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Update Progres Target") },
+        text = {
+            Column {
+                Text("Berapa banyak kemajuan yang kamu capai hari ini untuk '${goal.title}'?")
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = progressText,
+                    onValueChange = { progressText = it },
+                    label = { Text("Nilai Progres") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val value = progressText.toDoubleOrNull()
+                    if (value != null && value > 0) {
+                        onConfirm(value)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+            ) {
+                Text("Update")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+
+@Composable
+fun GoalFilterPill(
+    text: String,
+    isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val categoryColor = remember(goal.category?.color) {
-        try {
-            Color(android.graphics.Color.parseColor(goal.category?.color ?: "#94A3B8"))
-        } catch (e: Exception) {
-            Color(0xFF94A3B8)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(if (isSelected) Color(0xFF6366F1) else Color(0xFFF1F5F9))
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isSelected) Color.White else Color(0xFF475569)
+        )
+    }
+}
+
+@Composable
+fun MyGoalCardItem(
+    goal: Goal,
+    categoryName: String?,
+    onItemClick: () -> Unit,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    val progress = if (goal.targetValue > 0) (goal.currentValue / goal.targetValue).toFloat() else 0f
+    var showMenu by remember { mutableStateOf(false) }
+
+    val safeCategoryName = categoryName ?: ""
+    val iconAndColor = remember(safeCategoryName) {
+        when (safeCategoryName.lowercase()) {
+            "education", "belajar", "kuliah" -> Icons.Default.School to Color(0xFF4FAAFF)
+            "finance", "bisnis", "tabungan", "toko" -> Icons.Default.Work to Color(0xFF4CD964)
+            "health", "sport", "olahraga", "run" -> Icons.Default.DirectionsRun to Color(0xFFFF6B9D)
+            "creative", "art", "desain" -> Icons.Default.Palette to Color(0xFFFFB300)
+            else -> Icons.Default.Assignment to Color(0xFF8B5CF6)
         }
     }
 
-    val progressFraction = if (goal.targetValue > 0) {
-        (goal.currentValue / goal.targetValue).toFloat().coerceIn(0f, 1f)
-    } else 0f
-
-    Surface(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .clickable { onClick() }, // Menambahkan interaksi klik
+            .clickable { onItemClick() },
         shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(categoryColor.copy(alpha = 0.12f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(iconAndColor.second.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = iconAndColor.first,
+                            contentDescription = null,
+                            tint = iconAndColor.second,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = goal.category?.name ?: "General",
-                        color = categoryColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        text = goal.title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Text(
-                    text = goal.priority.uppercase(),
-                    color = when (goal.priority.lowercase()) {
-                        "high" -> Color(0xFFEF4444)
-                        "medium" -> Color(0xFFF59E0B)
-                        else -> Color(0xFF10B981)
-                    },
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            onClick = {
+                                showMenu = false
+                                onEditClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = Color.Red) },
+                            onClick = {
+                                showMenu = false
+                                onDeleteClick()
+                            }
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
-                text = goal.title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(CircleShape),
+                color = iconAndColor.second,
+                trackColor = Color(0xFFE2E8F0)
             )
 
-            if (!goal.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = goal.description, fontSize = 13.sp, color = Color.Gray, maxLines = 2)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(text = "Progress", fontSize = 11.sp, color = Color.Gray)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = if (goal.currentValue % 1 == 0.0) goal.currentValue.toInt().toString() else goal.currentValue.toString(),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Text(
-                            text = " / ${if (goal.targetValue % 1 == 0.0) goal.targetValue.toInt().toString() else goal.targetValue.toString()} ${goal.unit?.symbol ?: ""}",
-                            fontSize = 13.sp,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(bottom = 1.dp, start = 2.dp)
-                        )
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Straighten,
+                        contentDescription = null,
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "${goal.currentValue.toInt()}/${goal.targetValue.toInt()}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B)
+                    )
                 }
 
-                Text(
-                    text = "${(progressFraction * 100).toInt()}%",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = goal.deadline?.ifBlank { "No Deadline" } ?: "No Deadline",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = if (goal.priority?.lowercase() == "high") Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = null,
+                        tint = if (goal.priority?.lowercase() == "high") Color(0xFFFFB300) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LinearProgressIndicator(
-                progress = { progressFraction },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape),
-                color = categoryColor,
-                trackColor = Color(0xFFF1F5F9)
-            )
         }
-    }
-}
-
-@Composable
-fun EmptyGoalsView() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("🎯", fontSize = 48.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "Belum Ada Target Aktif", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Ketuk tombol + di bawah untuk mulai menyusun target tokomu.",
-            fontSize = 14.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(horizontal = 24.dp)
-        )
     }
 }

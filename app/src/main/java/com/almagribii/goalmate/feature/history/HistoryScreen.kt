@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
@@ -26,6 +27,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.feature.goal.GoalViewModel
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun HistoryScreen(
@@ -41,6 +46,37 @@ fun HistoryScreen(
         completed + active
     }
 
+    var selectedFilter by remember { mutableStateOf("Today") }
+    val filters = listOf("Today", "Yesterday", "This Week", "Older")
+
+    val filteredLogs = remember(activityLogs, selectedFilter) {
+        val today = LocalDate.now()
+        activityLogs.filter { goal ->
+            val dateStr = goal.updatedAt ?: goal.createdAt ?: return@filter false
+            val date = try {
+                OffsetDateTime.parse(dateStr)
+                    .atZoneSameInstant(ZoneId.systemDefault())
+                    .toLocalDate()
+            } catch (e: Exception) {
+                return@filter false
+            }
+            
+            when (selectedFilter) {
+                "Today" -> date == today
+                "Yesterday" -> date == today.minusDays(1)
+                "This Week" -> {
+                    val startOfWeek = today.minusDays(today.dayOfWeek.value.toLong() - 1)
+                    date >= startOfWeek && date <= today
+                }
+                "Older" -> {
+                    val startOfWeek = today.minusDays(today.dayOfWeek.value.toLong() - 1)
+                    date < startOfWeek
+                }
+                else -> true
+            }
+        }.sortedByDescending { it.updatedAt ?: it.createdAt }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.fetchCompletedGoals()
         viewModel.fetchActiveGoals()
@@ -52,9 +88,6 @@ fun HistoryScreen(
             .background(Color(0xFFFBFDFF))
     ) {
         // --- 1. PILIHAN FILTER ATAS (Pill Tabs) ---
-        var selectedFilter by remember { mutableStateOf("Today") }
-        val filters = listOf("Today", "Yesterday", "This Week", "Older")
-
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -72,7 +105,7 @@ fun HistoryScreen(
         }
 
         // --- 2. TIMELINE LIST VERTIKAL ---
-        if (activityLogs.isEmpty()) {
+        if (filteredLogs.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -80,7 +113,7 @@ fun HistoryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Belum ada riwayat aktivitas kawan",
+                    text = "Belum ada riwayat aktivitas untuk kategori ini kawan",
                     color = Color.Gray,
                     fontSize = 14.sp
                 )
@@ -92,8 +125,13 @@ fun HistoryScreen(
                     .padding(horizontal = 20.dp),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                items(activityLogs) { goal ->
-                    TimelineActivityRow(goal = goal)
+                items(filteredLogs) { goal ->
+                    TimelineActivityRow(
+                        goal = goal,
+                        onDeleteClick = {
+                            goal.id?.let { viewModel.deleteGoal(it) }
+                        }
+                    )
                 }
             }
         }
@@ -121,14 +159,34 @@ fun FilterPill(
 }
 
 @Composable
-fun TimelineActivityRow(goal: Goal) {
+fun TimelineActivityRow(
+    goal: Goal,
+    onDeleteClick: () -> Unit
+) {
     val isCompleted = goal.status.lowercase() == "completed"
     val progress = if (goal.targetValue > 0) (goal.currentValue / goal.targetValue).toFloat() else 0f
+    
+    val timeLabel = remember(goal.updatedAt, goal.createdAt) {
+        val dateStr = goal.updatedAt ?: goal.createdAt ?: ""
+        try {
+            val dateTime = OffsetDateTime.parse(dateStr).atZoneSameInstant(ZoneId.systemDefault())
+            val date = dateTime.toLocalDate()
+            val today = LocalDate.now()
+            
+            when {
+                date == today -> dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+                date == today.minusDays(1) -> "Yest"
+                else -> date.format(DateTimeFormatter.ofPattern("dd/MM"))
+            }
+        } catch (e: Exception) {
+            "Time"
+        }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min) // Menyesuaikan tinggi agar garis abu-abu vertikal presisi menjalar ke bawah
+            .height(IntrinsicSize.Min) 
     ) {
         // --- BLOK TIMELINE KIRI (WAKTU & GARIS VERTIKAL) ---
         Column(
@@ -137,30 +195,30 @@ fun TimelineActivityRow(goal: Goal) {
         ) {
             Spacer(modifier = Modifier.height(14.dp))
             Text(
-                text = "Today",
+                text = timeLabel,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF64748B)
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Dot Indikator Berwarna Lingkaran Biru/Cyan
+            // Dot Indikator
             Box(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF38BDF8).copy(alpha = 0.2f)),
+                    .background(if (isCompleted) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFF38BDF8).copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.TrendingUp,
                     contentDescription = null,
-                    tint = Color(0xFF0284C7),
+                    tint = if (isCompleted) Color(0xFF059669) else Color(0xFF0284C7),
                     modifier = Modifier.size(14.dp)
                 )
             }
 
-            // Garis vertikal abu-abu tipis penyambung antar baris
+            // Garis vertikal
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -175,7 +233,9 @@ fun TimelineActivityRow(goal: Goal) {
                 .weight(1f)
                 .padding(start = 12.dp, bottom = 16.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF).copy(alpha = 0.7f)),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isCompleted) Color(0xFFECFDF5).copy(alpha = 0.7f) else Color(0xFFEFF6FF).copy(alpha = 0.7f)
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(
@@ -192,12 +252,36 @@ fun TimelineActivityRow(goal: Goal) {
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B)
                     )
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = null,
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    
+                    Box {
+                        var expanded by remember { mutableStateOf(false) }
+                        IconButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Menu",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Hapus Riwayat") },
+                                onClick = {
+                                    onDeleteClick()
+                                    expanded = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                                }
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -213,14 +297,14 @@ fun TimelineActivityRow(goal: Goal) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Progress Bar mini halus penunjuk kapasitas riwayat saat ini
+                // Progress Bar
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(CircleShape),
-                    color = Color(0xFF4F46E5),
+                    color = if (isCompleted) Color(0xFF10B981) else Color(0xFF4F46E5),
                     trackColor = Color(0xFFE2E8F0)
                 )
 
@@ -232,13 +316,12 @@ fun TimelineActivityRow(goal: Goal) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Progress +${goal.currentValue.toInt()}",
+                        text = "${goal.currentValue.toInt()} / ${goal.targetValue.toInt()} ${goal.unit?.symbol ?: ""}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF475569)
                     )
 
-                    // Simbol lingkaran kecil di pojok kanan bawah
                     Box(
                         modifier = Modifier
                             .size(18.dp)
@@ -247,9 +330,9 @@ fun TimelineActivityRow(goal: Goal) {
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowDownward,
+                            imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.ArrowDownward,
                             contentDescription = null,
-                            tint = Color(0xFF6366F1),
+                            tint = if (isCompleted) Color(0xFF10B981) else Color(0xFF6366F1),
                             modifier = Modifier.size(10.dp)
                         )
                     }
