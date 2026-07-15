@@ -80,4 +80,22 @@ class GoalRepositoryImpl @Inject constructor(
             .decodeList<Goal>()
         emit(response)
     }
+
+    override suspend fun deleteGoal(goalId: String): Result<Unit> = runCatching {
+        postgrest.from("goals").update({
+            set("deleted_at", "now()")
+        }) {
+            filter {
+                eq("id", goalId)
+            }
+        }
+    }
+
+    override suspend fun updateGoal(goal: Goal): Result<Unit> = runCatching {
+        postgrest.from("goals").update(goal) {
+            filter {
+                eq("id", goal.id ?: "")
+            }
+        }
+    }
 }
