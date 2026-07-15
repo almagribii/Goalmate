@@ -84,30 +84,38 @@ class GoalRepositoryImpl @Inject constructor(
     }
 
     override fun getRecentActivity(userId: String): Flow<List<GoalLog>> = flow {
-        val response = postgrest.from("goal_logs")
-            .select(Columns.raw("*, goal_title:goals(title)")) {
-                filter {
-                    eq("user_id", userId)
+        try {
+            val response = postgrest.from("goal_logs")
+                .select(Columns.raw("*, goal_title:goals(title)")) {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                    limit(5)
+                    order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                 }
-                limit(5)
-                order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
-            }
-            .decodeList<JsonObject>()
-            .map { json ->
-                val goalTitle = json["goal_title"]?.let {
-                    if (it is JsonObject) it["title"]?.jsonPrimitive?.contentOrNull
-                    else null
+                .decodeList<JsonObject>()
+                .map { json ->
+                    val goalTitleObj = json["goal_title"]?.let {
+                        if (it is JsonObject) it
+                        else if (it is JsonArray && it.isNotEmpty()) it[0].jsonObject
+                        else null
+                    }
+                    val goalTitle = goalTitleObj?.get("title")?.jsonPrimitive?.contentOrNull
+                    
+                    GoalLog(
+                        id = json["id"]?.jsonPrimitive?.contentOrNull,
+                        goalId = json["goal_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                        userId = json["user_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                        value = json["value"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                        createdAt = json["created_at"]?.jsonPrimitive?.contentOrNull,
+                        goalTitle = goalTitle
+                    )
                 }
-                GoalLog(
-                    id = json["id"]?.jsonPrimitive?.contentOrNull,
-                    goalId = json["goal_id"]?.jsonPrimitive?.contentOrNull ?: "",
-                    userId = json["user_id"]?.jsonPrimitive?.contentOrNull ?: "",
-                    value = json["value"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                    createdAt = json["created_at"]?.jsonPrimitive?.contentOrNull,
-                    goalTitle = goalTitle
-                )
-            }
-        emit(response)
+            emit(response)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emit(emptyList())
+        }
     }
 
     override suspend fun deleteGoal(goalId: String): Result<Unit> = runCatching {
