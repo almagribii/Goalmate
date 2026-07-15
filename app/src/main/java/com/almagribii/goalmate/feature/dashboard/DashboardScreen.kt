@@ -24,6 +24,7 @@ fun DashboardScreen(
     fullName: String,
     email: String,
     onLogoutClick: () -> Unit,
+    onNavigateToBadges: () -> Unit,
     goalViewModel: GoalViewModel = hiltViewModel()
 ) {
     var currentTab by remember { mutableStateOf<NavigationItem>(NavigationItem.Dashboard) }
@@ -78,7 +79,13 @@ fun DashboardScreen(
                 NavigationItem.Dashboard -> HomeScreen(fullName = fullName, viewModel = goalViewModel)
                 NavigationItem.MyGoal -> MyGoalScreen(viewModel = goalViewModel)
                 NavigationItem.History -> HistoryScreen(viewModel = goalViewModel)
-                NavigationItem.Profile -> ProfileScreen(fullName = fullName, email = email, onLogoutClick = onLogoutClick, viewModel = goalViewModel)
+                NavigationItem.Profile -> ProfileScreen(
+                    fullName = fullName,
+                    email = email,
+                    onLogoutClick = onLogoutClick,
+                    onNavigateToBadges = onNavigateToBadges,
+                    viewModel = goalViewModel
+                )
             }
         }
     }

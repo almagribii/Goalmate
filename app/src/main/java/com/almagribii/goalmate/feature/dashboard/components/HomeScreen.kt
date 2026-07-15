@@ -51,6 +51,7 @@ fun HomeScreen(
     val completedGoalsState by viewModel.completedGoalsState.collectAsState()
     val streakCount by viewModel.streakState.collectAsState()
     val categoriesState by viewModel.categoriesState.collectAsState()
+    val recentActivityState by viewModel.recentActivityState.collectAsState()
 
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
@@ -61,6 +62,7 @@ fun HomeScreen(
         viewModel.fetchCompletedGoals()
         viewModel.fetchUserProfile()
         viewModel.loadMasterData()
+        viewModel.fetchRecentActivity()
         isRefreshing = false
     }
 
@@ -86,6 +88,7 @@ fun HomeScreen(
         viewModel.fetchCompletedGoals()
         viewModel.fetchUserProfile()
         viewModel.loadMasterData()
+        viewModel.fetchRecentActivity()
     }
 
     PullToRefreshBox(
@@ -309,41 +312,84 @@ fun HomeScreen(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFEFF6FF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "⚡", fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = "Aktivitas Terkini Goalmate",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
-                            )
-                            Text(
-                                text = "Kamu aktif mengupdate progres target barusan.",
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
+                when (val state = recentActivityState) {
+                    is UiState.Loading -> {
+                        if (!isRefreshing) {
+                            repeat(2) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(70.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .shimmerEffect()
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
                         }
                     }
+                    is UiState.Success -> {
+                        if (state.data.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFFF1F5F9))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "Belum ada aktivitas terbaru kawan", color = Color.Gray, fontSize = 13.sp)
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                state.data.forEach { log ->
+                                    ActivityItem(log)
+                                }
+                            }
+                        }
+                    }
+                    is UiState.Error -> {
+                        Text("Gagal memuat aktivitas", color = Color.Red, fontSize = 12.sp)
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun ActivityItem(log: com.almagribii.goalmate.domain.model.GoalLog) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEFF6FF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "⚡", fontSize = 18.sp)
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = log.goalTitle ?: "Aktivitas Goalmate",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+                Text(
+                    text = "Berhasil menambah progres +${log.value.toInt()}",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
             }
         }
     }

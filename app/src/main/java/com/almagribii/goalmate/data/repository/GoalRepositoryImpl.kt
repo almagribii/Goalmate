@@ -2,6 +2,7 @@ package com.almagribii.goalmate.data.repository
 
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.domain.model.GoalCategory
+import com.almagribii.goalmate.domain.model.GoalLog
 import com.almagribii.goalmate.domain.model.GoalUnit
 import com.almagribii.goalmate.domain.repository.GoalRepository
 import io.github.jan.supabase.postgrest.Postgrest
@@ -9,6 +10,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,6 +80,33 @@ class GoalRepositoryImpl @Inject constructor(
                 }
             }
             .decodeList<Goal>()
+        emit(response)
+    }
+
+    override fun getRecentActivity(userId: String): Flow<List<GoalLog>> = flow {
+        val response = postgrest.from("goal_logs")
+            .select(Columns.raw("*, goal_title:goals(title)")) {
+                filter {
+                    eq("user_id", userId)
+                }
+                limit(5)
+                order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+            }
+            .decodeList<JsonObject>()
+            .map { json ->
+                val goalTitle = json["goal_title"]?.let {
+                    if (it is JsonObject) it["title"]?.jsonPrimitive?.contentOrNull
+                    else null
+                }
+                GoalLog(
+                    id = json["id"]?.jsonPrimitive?.contentOrNull,
+                    goalId = json["goal_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                    userId = json["user_id"]?.jsonPrimitive?.contentOrNull ?: "",
+                    value = json["value"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    createdAt = json["created_at"]?.jsonPrimitive?.contentOrNull,
+                    goalTitle = goalTitle
+                )
+            }
         emit(response)
     }
 

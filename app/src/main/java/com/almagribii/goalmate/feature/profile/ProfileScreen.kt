@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -47,6 +48,7 @@ fun ProfileScreen(
     fullName: String,
     email: String,
     onLogoutClick: () -> Unit,
+    onNavigateToBadges: () -> Unit,
     viewModel: GoalViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -202,6 +204,11 @@ fun ProfileScreen(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
+            MenuRowItem(
+                title = "My Badges",
+                icon = Icons.Default.EmojiEvents,
+                onClick = onNavigateToBadges
+            )
             MenuRowItem(
                 title = "Goals Created",
                 icon = Icons.Default.List,

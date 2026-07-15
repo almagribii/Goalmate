@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.almagribii.goalmate.core.common.UiState
 import com.almagribii.goalmate.core.notification.StreakReminderWorker
+import com.almagribii.goalmate.domain.model.Achievement
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.domain.model.GoalCategory
 import com.almagribii.goalmate.domain.model.GoalUnit
@@ -16,12 +17,8 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
+import com.almagribii.goalmate.domain.model.GoalLog
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 
 @HiltViewModel
@@ -56,8 +53,12 @@ class GoalViewModel @Inject constructor(
     private val _completedGoalsState = MutableStateFlow<UiState<List<Goal>>>(UiState.Loading)
     val completedGoalsState: StateFlow<UiState<List<Goal>>> = _completedGoalsState.asStateFlow()
 
+    private val _recentActivityState = MutableStateFlow<UiState<List<GoalLog>>>(UiState.Loading)
+    val recentActivityState: StateFlow<UiState<List<GoalLog>>> = _recentActivityState.asStateFlow()
+
     init {
         fetchActiveGoals()
+        fetchRecentActivity()
     }
 
     fun fetchActiveGoals() {
@@ -154,6 +155,22 @@ class GoalViewModel @Inject constructor(
         }
     }
 
+    fun fetchRecentActivity() {
+        viewModelScope.launch {
+            authRepository.currentUser.collect { user ->
+                if (user != null) {
+                    goalRepository.getRecentActivity(user.id)
+                        .catch { exception ->
+                            _recentActivityState.value = UiState.Error(exception.message ?: "Unknown Error")
+                        }
+                        .collect { logs ->
+                            _recentActivityState.value = UiState.Success(logs)
+                        }
+                }
+            }
+        }
+    }
+
     fun updateGoalProgress(goal: Goal, additionalValue: Double) {
         viewModelScope.launch {
             val newValue = goal.currentValue + additionalValue
@@ -163,6 +180,21 @@ class GoalViewModel @Inject constructor(
                 goal.id?.let { goalId ->
                     goalRepository.updateGoalProgress(goalId, newValue, newStatus).fold(
                         onSuccess = {
+                            // Catat log aktivitas
+                            viewModelScope.launch {
+                                try {
+                                    val logData = buildJsonObject {
+                                        put("goal_id", goalId)
+                                        put("user_id", user.id)
+                                        put("value", additionalValue)
+                                    }
+                                    postgrest.from("goal_logs").insert(logData)
+                                    fetchRecentActivity()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+
                             updateStreak(user.id)
                             fetchActiveGoals()
                         },
@@ -210,13 +242,13 @@ class GoalViewModel @Inject constructor(
                             val streak = response["streak_count"]?.jsonPrimitive?.intOrNull ?: 0
                             val lastActivityStr = response["last_activity_at"]?.jsonPrimitive?.contentOrNull
                             
-                            // VALIDASI STREAK SAAT LOGIN/OPEN APP
+                            // VALIDASI STREAK SAAT LOGIN/OPEN APP (HARIAN)
                             if (streak > 0 && !lastActivityStr.isNullOrBlank()) {
-                                val lastActivity = java.time.OffsetDateTime.parse(lastActivityStr)
-                                val diff = java.time.Duration.between(lastActivity, java.time.OffsetDateTime.now())
-                                val minutesDiff = diff.toMinutes()
-
-                                if (minutesDiff >= 2) {
+                                val lastActivity = java.time.OffsetDateTime.parse(lastActivityStr).toLocalDate()
+                                val today = java.time.LocalDate.now()
+                                
+                                // Jika aktivitas terakhir adalah kemarin lusa atau lebih lama, streak hangus
+                                if (lastActivity.isBefore(today.minusDays(1))) {
                                     // Reset terdeteksi!
                                     _streakState.value = 0
                                     _streakResetEvent.emit(Unit)
@@ -255,41 +287,38 @@ class GoalViewModel @Inject constructor(
                 val lastActivityStr = response?.get("last_activity_at")?.jsonPrimitive?.contentOrNull
 
                 val now = java.time.OffsetDateTime.now()
+                val today = now.toLocalDate()
                 var newStreak = currentStreak
                 var isIncreased = false
 
                 if (!lastActivityStr.isNullOrBlank()) {
-                    val lastActivity = java.time.OffsetDateTime.parse(lastActivityStr)
-                    val diff = java.time.Duration.between(lastActivity, now)
-                    val minutesDiff = diff.toMinutes()
+                    val lastActivity = java.time.OffsetDateTime.parse(lastActivityStr).toLocalDate()
 
                     when {
-                        minutesDiff == 1L -> {
-                            // Tepat lewat 1 menit -> Streak bertambah
+                        lastActivity == today.minusDays(1) -> {
+                            // Aktivitas terakhir adalah kemarin -> Streak bertambah
                             newStreak += 1
                             isIncreased = true
                             
-                            // Kirim notifikasi selamat berhasil menaikkan streak menit!
                             StreakReminderWorker.triggerInstantNotification(
                                 context,
                                 "Streak Naik! 🔥",
-                                "Kerja bagus! Streak tokomu naik menjadi $newStreak menit."
+                                "Kerja bagus! Streak harianmu naik menjadi $newStreak hari."
                             )
                         }
-                        minutesDiff >= 2L -> {
-                            // Terlambat (lewat 2 menit atau lebih) -> Reset ke 1
+                        lastActivity.isBefore(today.minusDays(1)) -> {
+                            // Terlambat (bolong lebih dari sehari) -> Reset ke 1
                             newStreak = 1
                             isIncreased = true
                             
-                            // Kirim notifikasi peringatan bahwa streak hangus karena bolong
                             StreakReminderWorker.triggerInstantNotification(
                                 context,
                                 "Streak Hangus 💀",
                                 "Waduh kawan, kamu telat! Streak kamu ter-reset kembali ke 1."
                             )
                         }
-                        minutesDiff == 0L -> {
-                            // Masih di menit yang sama, jangan tambah streak
+                        lastActivity == today -> {
+                            // Sudah ada aktivitas hari ini, jangan tambah streak lagi
                             if (newStreak == 0) {
                                 newStreak = 1
                                 isIncreased = true
@@ -321,6 +350,47 @@ class GoalViewModel @Inject constructor(
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("StreakDebug", "Gagal upsert streak ke DB: ${e.message}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private val _allAchievements = MutableStateFlow<List<com.almagribii.goalmate.domain.model.Achievement>>(emptyList())
+    val allAchievements: StateFlow<List<com.almagribii.goalmate.domain.model.Achievement>> = _allAchievements.asStateFlow()
+
+    private val _earnedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
+    val earnedAchievementIds: StateFlow<Set<String>> = _earnedAchievementIds.asStateFlow()
+
+    val totalXp: StateFlow<Int> = _earnedAchievementIds.map { earnedIds ->
+        _allAchievements.value.filter { it.id in earnedIds }.sumOf { it.xp }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val userLevel: StateFlow<Int> = totalXp.map { xp ->
+        (xp / 1000) + 1
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+
+    val nextLevelXpProgress: StateFlow<Float> = totalXp.map { xp ->
+        val currentLevelXp = xp % 1000
+        currentLevelXp.toFloat() / 1000f
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
+    fun fetchAchievementsData() {
+        viewModelScope.launch {
+            try {
+                val allBadges = postgrest.from("achievements")
+                    .select(io.github.jan.supabase.postgrest.query.Columns.ALL)
+                    .decodeList<com.almagribii.goalmate.domain.model.Achievement>()
+                _allAchievements.value = allBadges
+
+                authRepository.currentUser.first()?.let { user ->
+                    val userEarned = postgrest.from("user_achievements")
+                        .select(io.github.jan.supabase.postgrest.query.Columns.ALL) {
+                            filter { eq("user_id", user.id) }
+                        }
+                        .decodeList<com.almagribii.goalmate.domain.model.UserAchievement>()
+                    _earnedAchievementIds.value = userEarned.map { it.achievementId }.toSet()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

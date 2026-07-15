@@ -16,10 +16,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.almagribii.goalmate.core.notification.ReminderScheduler
 import com.almagribii.goalmate.core.navigation.Screen
 import com.almagribii.goalmate.feature.auth.LoginScreen
 import com.almagribii.goalmate.feature.auth.LoginViewModel
 import com.almagribii.goalmate.feature.dashboard.DashboardScreen
+import com.almagribii.goalmate.feature.achievement.BadgesScreen
 import com.almagribii.goalmate.ui.theme.GoalmateTheme
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -34,6 +36,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Jadwalkan pengingat harian
+        ReminderScheduler.scheduleDailyReminder(this)
+
         setContent {
             GoalmateTheme {
                 MaterialTheme {
@@ -95,6 +101,18 @@ class MainActivity : ComponentActivity() {
                                             googleSignInClient.signOut().addOnCompleteListener {
                                             }
                                         }
+                                    },
+                                    onNavigateToBadges = {
+                                        navController.navigate(Screen.Badges)
+                                    }
+                                )
+                            }
+
+                            // 3. Halaman Badges
+                            composable<Screen.Badges> {
+                                BadgesScreen(
+                                    onBackClick = {
+                                        navController.popBackStack()
                                     }
                                 )
                             }

@@ -8,4 +8,7 @@ sealed interface Screen {
 
     @Serializable
     data object Dashboard : Screen
+
+    @Serializable
+    data object Badges : Screen
 }

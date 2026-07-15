@@ -63,12 +63,12 @@ fun DashboardHeader(
         ) {
             Text(
                 text = when (currentTab) {
-                    NavigationItem.Dashboard -> "Home"
+                    NavigationItem.Dashboard -> "Goalmate"
                     NavigationItem.MyGoal -> "My Goals"
                     NavigationItem.History -> "History"
                     NavigationItem.Profile -> "Profile"
                 },
-                fontSize = 28.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFF1E293B)
             )
@@ -77,7 +77,6 @@ fun DashboardHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Streak Flame ala Duolingo
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -100,17 +99,7 @@ fun DashboardHeader(
                     )
                 }
 
-                IconButton(
-                    onClick = { /* Handle buka halaman notifikasi */ },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Notifications,
-                        contentDescription = "Notifications",
-                        tint = Color(0xFF1E293B),
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+
 
                 Box(
                     modifier = Modifier

@@ -2,6 +2,7 @@ package com.almagribii.goalmate.domain.repository
 
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.domain.model.GoalCategory
+import com.almagribii.goalmate.domain.model.GoalLog
 import com.almagribii.goalmate.domain.model.GoalUnit
 import kotlinx.coroutines.flow.Flow
 
@@ -23,6 +24,8 @@ interface GoalRepository {
     suspend fun getUnits(): Result<List<GoalUnit>>
 
     fun getCompletedGoals(userId: String): Flow<List<Goal>>
+
+    fun getRecentActivity(userId: String): Flow<List<GoalLog>>
 
     suspend fun deleteGoal(goalId: String): Result<Unit>
 
