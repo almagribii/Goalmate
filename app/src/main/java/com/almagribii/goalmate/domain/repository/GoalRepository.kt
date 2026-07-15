@@ -23,4 +23,8 @@ interface GoalRepository {
     suspend fun getUnits(): Result<List<GoalUnit>>
 
     fun getCompletedGoals(userId: String): Flow<List<Goal>>
+
+    suspend fun deleteGoal(goalId: String): Result<Unit>
+
+    suspend fun updateGoal(goal: Goal): Result<Unit>
 }

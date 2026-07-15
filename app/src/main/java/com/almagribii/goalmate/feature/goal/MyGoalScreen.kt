@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
+import com.almagribii.goalmate.core.common.shimmerEffect
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.domain.model.GoalCategory
 import com.almagribii.goalmate.feature.dashboard.components.AddGoalBottomSheet
@@ -54,6 +57,16 @@ fun MyGoalScreen(
     var editingGoal by remember { mutableStateOf<Goal?>(null) }
     var updatingProgressGoal by remember { mutableStateOf<Goal?>(null) }
     var showAddGoalSheet by remember { mutableStateOf(false) }
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    fun onRefresh() {
+        isRefreshing = true
+        viewModel.fetchActiveGoals()
+        viewModel.loadMasterData()
+        isRefreshing = false
+    }
 
     val activeGoals = remember(activeGoalsState) {
         (activeGoalsState as? UiState.Success)?.data ?: emptyList()
@@ -80,102 +93,138 @@ fun MyGoalScreen(
         viewModel.loadMasterData()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFBFDFF))
+    PullToRefreshBox(
+        state = pullToRefreshState,
+        isRefreshing = isRefreshing,
+        onRefresh = { onRefresh() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Search", color = Color(0xFF94A3B8), fontSize = 15.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF94A3B8)) },
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            shape = RoundedCornerShape(99.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
-                unfocusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
-                disabledContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-            ),
-            singleLine = true
-        )
-
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .background(Color(0xFFFBFDFF))
         ) {
-            item {
-                GoalFilterPill(
-                    text = "All",
-                    isSelected = selectedCategoryId == "All",
-                    onClick = { selectedCategoryId = "All" }
-                )
-            }
-            items(categories) { category ->
-                GoalFilterPill(
-                    text = category.name,
-                    isSelected = selectedCategoryId == category.id,
-                    onClick = { selectedCategoryId = category.id }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (filteredGoals.isEmpty()) {
-            Box(
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search", color = Color(0xFF94A3B8), fontSize = 15.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF94A3B8)) },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(99.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                    unfocusedContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                    disabledContainerColor = Color(0xFFF1F5F9).copy(alpha = 0.6f),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                ),
+                singleLine = true
+            )
+
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "No active goals found",
-                        color = Color.Gray,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { showAddGoalSheet = true },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add Your First Goal")
+                if (categoriesState is UiState.Loading && !isRefreshing) {
+                    items(5) {
+                        Box(
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(99.dp))
+                                .shimmerEffect()
+                        )
+                    }
+                } else {
+                    item {
+                        GoalFilterPill(
+                            text = "All",
+                            isSelected = selectedCategoryId == "All",
+                            onClick = { selectedCategoryId = "All" }
+                        )
+                    }
+                    items(categories) { category ->
+                        GoalFilterPill(
+                            text = category.name,
+                            isSelected = selectedCategoryId == category.id,
+                            onClick = { selectedCategoryId = category.id }
+                        )
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(filteredGoals) { goal ->
-                    val matchedCategory = categories.find { it.id == goal.categoryId }
-                    MyGoalCardItem(
-                        goal = goal,
-                        categoryName = matchedCategory?.name ?: "",
-                        onItemClick = {
-                            updatingProgressGoal = goal
-                        },
-                        onEditClick = {
-                            editingGoal = goal
-                        },
-                        onDeleteClick = {
-                            goal.id?.let { viewModel.deleteGoal(it) }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (activeGoalsState is UiState.Loading && !isRefreshing) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(5) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .shimmerEffect()
+                        )
+                    }
+                }
+            } else if (filteredGoals.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "No active goals found",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { showAddGoalSheet = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add Your First Goal")
                         }
-                    )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredGoals) { goal ->
+                        val matchedCategory = categories.find { it.id == goal.categoryId }
+                        MyGoalCardItem(
+                            goal = goal,
+                            categoryName = matchedCategory?.name ?: "",
+                            onItemClick = {
+                                updatingProgressGoal = goal
+                            },
+                            onEditClick = {
+                                editingGoal = goal
+                            },
+                            onDeleteClick = {
+                                goal.id?.let { viewModel.deleteGoal(it) }
+                            }
+                        )
+                    }
                 }
             }
         }

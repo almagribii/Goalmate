@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
+import com.almagribii.goalmate.core.common.shimmerEffect
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.feature.goal.GoalViewModel
 import java.time.LocalDate
@@ -32,12 +35,23 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     viewModel: GoalViewModel = hiltViewModel()
 ) {
     val completedGoalsState by viewModel.completedGoalsState.collectAsState()
     val activeGoalsState by viewModel.activeGoalsState.collectAsState()
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    fun onRefresh() {
+        isRefreshing = true
+        viewModel.fetchCompletedGoals()
+        viewModel.fetchActiveGoals()
+        isRefreshing = false
+    }
 
     // Menggabungkan target aktif dan selesai sebagai representasi log aktivitas riwayat
     val activityLogs = remember(activeGoalsState, completedGoalsState) {
@@ -82,56 +96,79 @@ fun HistoryScreen(
         viewModel.fetchActiveGoals()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFBFDFF))
+    PullToRefreshBox(
+        state = pullToRefreshState,
+        isRefreshing = isRefreshing,
+        onRefresh = { onRefresh() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        // --- 1. PILIHAN FILTER ATAS (Pill Tabs) ---
-        LazyRow(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxSize()
+                .background(Color(0xFFFBFDFF))
         ) {
-            items(filters) { filterText ->
-                val isSelected = filterText == selectedFilter
-                FilterPill(
-                    text = filterText,
-                    isSelected = isSelected,
-                    onClick = { selectedFilter = filterText }
-                )
-            }
-        }
-
-        // --- 2. TIMELINE LIST VERTIKAL ---
-        if (filteredLogs.isEmpty()) {
-            Box(
+            // --- 1. PILIHAN FILTER ATAS (Pill Tabs) ---
+            LazyRow(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "Belum ada riwayat aktivitas untuk kategori ini kawan",
-                    color = Color.Gray,
-                    fontSize = 14.sp
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                contentPadding = PaddingValues(bottom = 32.dp)
-            ) {
-                items(filteredLogs) { goal ->
-                    TimelineActivityRow(
-                        goal = goal,
-                        onDeleteClick = {
-                            goal.id?.let { viewModel.deleteGoal(it) }
-                        }
+                items(filters) { filterText ->
+                    val isSelected = filterText == selectedFilter
+                    FilterPill(
+                        text = filterText,
+                        isSelected = isSelected,
+                        onClick = { selectedFilter = filterText }
                     )
+                }
+            }
+
+            // --- 2. TIMELINE LIST VERTIKAL ---
+            if ((completedGoalsState is UiState.Loading || activeGoalsState is UiState.Loading) && !isRefreshing) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(5) {
+                        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                            Box(modifier = Modifier.width(65.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                                Box(modifier = Modifier.padding(top = 14.dp).size(24.dp).clip(CircleShape).shimmerEffect())
+                            }
+                            Box(modifier = Modifier.weight(1f).height(100.dp).clip(RoundedCornerShape(20.dp)).shimmerEffect())
+                        }
+                    }
+                }
+            } else if (filteredLogs.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Belum ada riwayat aktivitas untuk kategori ini kawan",
+                        color = Color.Gray,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
+                    items(filteredLogs) { goal ->
+                        TimelineActivityRow(
+                            goal = goal,
+                            onDeleteClick = {
+                                goal.id?.let { viewModel.deleteGoal(it) }
+                            }
+                        )
+                    }
                 }
             }
         }

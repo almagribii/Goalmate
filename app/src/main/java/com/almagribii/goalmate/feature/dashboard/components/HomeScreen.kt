@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,10 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.almagribii.goalmate.core.common.UiState
+import com.almagribii.goalmate.core.common.shimmerEffect
 import com.almagribii.goalmate.domain.model.Goal
 import com.almagribii.goalmate.domain.model.GoalCategory
 import com.almagribii.goalmate.feature.goal.GoalViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     fullName: String,
@@ -47,6 +51,18 @@ fun HomeScreen(
     val completedGoalsState by viewModel.completedGoalsState.collectAsState()
     val streakCount by viewModel.streakState.collectAsState()
     val categoriesState by viewModel.categoriesState.collectAsState()
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    fun onRefresh() {
+        isRefreshing = true
+        viewModel.fetchActiveGoals()
+        viewModel.fetchCompletedGoals()
+        viewModel.fetchUserProfile()
+        viewModel.loadMasterData()
+        isRefreshing = false
+    }
 
     val activeGoals = remember(activeGoalsState) {
         (activeGoalsState as? UiState.Success)?.data ?: emptyList()
@@ -69,226 +85,263 @@ fun HomeScreen(
         viewModel.fetchActiveGoals()
         viewModel.fetchCompletedGoals()
         viewModel.fetchUserProfile()
-        viewModel.loadMasterData() // Memuat data master kategori dari Supabase
+        viewModel.loadMasterData()
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFBFDFF)),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 24.dp)
+    PullToRefreshBox(
+        state = pullToRefreshState,
+        isRefreshing = isRefreshing,
+        onRefresh = { onRefresh() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        // --- 1. GOOD MORNING HEADER ---
-        item {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Good Morning,",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1E293B)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFFBFDFF)),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 24.dp)
+        ) {
+            // --- 1. GOOD MORNING HEADER ---
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = fullName.split(" ").firstOrNull() ?: "Brucad",
+                        text = "Good Morning,",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF1E293B)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "👋", fontSize = 22.sp)
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        // --- 2. TODAY'S PROGRESS CARD ---
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFF6366F1), Color(0xFF38BDF8))
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Today's Progress Card",
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
+                            text = fullName.split(" ").firstOrNull() ?: "Brucad",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1E293B)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "👋", fontSize = 22.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // --- 2. TODAY'S PROGRESS CARD ---
+            item {
+                if (activeGoalsState is UiState.Loading && !isRefreshing) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .shimmerEffect()
+                    )
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(Color(0xFF6366F1), Color(0xFF38BDF8))
+                                    )
+                                )
+                                .padding(20.dp)
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.size(70.dp)
-                            ) {
-                                val animatedProgress = totalProgressPercent.toFloat() / 100f
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    drawCircle(
-                                        color = Color.White.copy(alpha = 0.2f),
-                                        style = Stroke(width = 6.dp.toPx())
-                                    )
-                                    drawArc(
-                                        color = Color.White,
-                                        startAngle = -90f,
-                                        sweepAngle = 360f * animatedProgress,
-                                        useCenter = false,
-                                        style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-                                    )
+                            Column {
+                                Text(
+                                    text = "Today's Progress Card",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.size(70.dp)
+                                    ) {
+                                        val animatedProgress = totalProgressPercent.toFloat() / 100f
+                                        Canvas(modifier = Modifier.fillMaxSize()) {
+                                            drawCircle(
+                                                color = Color.White.copy(alpha = 0.2f),
+                                                style = Stroke(width = 6.dp.toPx())
+                                            )
+                                            drawArc(
+                                                color = Color.White,
+                                                startAngle = -90f,
+                                                sweepAngle = 360f * animatedProgress,
+                                                useCenter = false,
+                                                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                                            )
+                                        }
+                                        Text(
+                                            text = "$totalProgressPercent%",
+                                            color = Color.White,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "$totalProgressPercent%",
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                        Text(
+                                            text = "Progress",
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "🔥 $streakCount",
+                                            color = Color.White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                        Text(
+                                            text = "Streak",
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
                                 }
-                                Text(
-                                    text = "$totalProgressPercent%",
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "$totalProgressPercent%",
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = "Progress",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "🔥 $streakCount",
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = "Streak",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 12.sp
-                                )
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
 
-        // --- 3. ROW CATEGORIES SHORTCUT (DINAMIS DARI SUPABASE) ---
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-            ) {
-                if (categories.isEmpty()) {
-                    // Fallback seumpama data kategori belum termuat
-                    CategoryShortcutItem("General", Icons.Default.Assignment, Color(0xFF64748B))
-                } else {
-                    categories.forEach { category ->
-                        val (icon, color) = getCategoryVisuals(category.name)
-                        CategoryShortcutItem(category.name, icon, color)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(28.dp))
-        }
-
-        // --- 4. UPCOMING GOALS SECTION ---
-        item {
-            Text(
-                text = "Upcoming Goals",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B),
-                modifier = Modifier.padding(bottom = 14.dp)
-            )
-
-            if (activeGoals.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFF1F5F9))
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "Belum ada target mendatang kawan", color = Color.Gray, fontSize = 13.sp)
-                }
-            } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(activeGoals) { goal ->
-                        // Kirim data list kategori untuk mencari nama kategori yang cocok di kartu target
-                        val categoryList = (categoriesState as? UiState.Success)?.data ?: emptyList()
-                        val matchedCategory = categoryList.find { it.id == goal.categoryId }
-                        UpcomingGoalCard(goal = goal, categoryName = matchedCategory?.name ?: "")
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(28.dp))
-        }
-
-        // --- 5. RECENT ACTIVITY SECTION ---
-        item {
-            Text(
-                text = "Recent Activity",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B),
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
+            // --- 3. ROW CATEGORIES SHORTCUT (DINAMIS DARI SUPABASE) ---
+            item {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
                 ) {
+                    if (categoriesState is UiState.Loading && !isRefreshing) {
+                        repeat(4) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp, 80.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .shimmerEffect()
+                            )
+                        }
+                    } else if (categories.isEmpty()) {
+                        // Fallback seumpama data kategori belum termuat
+                        CategoryShortcutItem("General", Icons.Default.Assignment, Color(0xFF64748B))
+                    } else {
+                        categories.forEach { category ->
+                            val (icon, color) = getCategoryVisuals(category.name)
+                            CategoryShortcutItem(category.name, icon, color)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
+            // --- 4. UPCOMING GOALS SECTION ---
+            item {
+                Text(
+                    text = "Upcoming Goals",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier.padding(bottom = 14.dp)
+                )
+
+                if (activeGoalsState is UiState.Loading && !isRefreshing) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(3) {
+                            Box(
+                                modifier = Modifier
+                                    .size(150.dp, 130.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .shimmerEffect()
+                            )
+                        }
+                    }
+                } else if (activeGoals.isEmpty()) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFEFF6FF)),
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFF1F5F9))
+                            .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "⚡", fontSize = 18.sp)
+                        Text(text = "Belum ada target mendatang kawan", color = Color.Gray, fontSize = 13.sp)
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "Aktivitas Terkini Goalmate",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
-                        )
-                        Text(
-                            text = "Kamu aktif mengupdate progres target barusan.",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(activeGoals) { goal ->
+                            // Kirim data list kategori untuk mencari nama kategori yang cocok di kartu target
+                            val categoryList = (categoriesState as? UiState.Success)?.data ?: emptyList()
+                            val matchedCategory = categoryList.find { it.id == goal.categoryId }
+                            UpcomingGoalCard(goal = goal, categoryName = matchedCategory?.name ?: "")
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
+            // --- 5. RECENT ACTIVITY SECTION ---
+            item {
+                Text(
+                    text = "Recent Activity",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEFF6FF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "⚡", fontSize = 18.sp)
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "Aktivitas Terkini Goalmate",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B)
+                            )
+                            Text(
+                                text = "Kamu aktif mengupdate progres target barusan.",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
                     }
                 }
             }
